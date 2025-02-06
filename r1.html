@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Search Results</title>
+    <style>
+        h1 {
+            font-size: 21px;
+            margin-bottom: 15px;
+            color: #333;
+            font-weight: 300;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        #search {
+            padding: 8px;
+            flex-grow: 1;
+            max-width: 300px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+            background-color: rgba(248, 248, 248, 1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f8f8f8;
+            font-weight: 600;
+        }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #resetBtn {
+            background-color: #6c757d;
+        }
+
+        #resetBtn:hover {
+            background-color: #5a6268;
+        }
+
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Processor Selector</h1>
+    <div class="search-container">
+        <input type="text" id="search" placeholder="Enter model (e.g., 8124 or 8124P)">
+        <button onclick="fetchData()">Search</button>
+        <button onclick="resetSearch()" id="resetBtn">Reset</button>
+    </div>
+
+    <table id="resultTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>Model Name</th>
+                <th>TDP</th>
+                <th>Application</th>
+                <th>Cooler</th>
+                <th>Cooler Type</th>
+                <th>Maximum Power</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        const CSV_URL = "https://411cca39-d6ee-4c7d-ae85-df0a3e48e6fe.usrfiles.com/ugd/411cca_fdeba4ed351e467f98d9b537405e74a5.csv";
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const params = new URLSearchParams(window.location.search);
+            const query = params.get('query');
+            if (query) {
+                document.getElementById('search').value = decodeURIComponent(query);
+                fetchData(decodeURIComponent(query));
+            }
+        });
+
+        async function fetchData(query = '') {
+            const searchQuery = query || document.getElementById('search').value.trim().toLowerCase();
+            if (!searchQuery) {
+                alert("Please enter a model name.");
+                return;
+            }
+
+            try {
+                const response = await fetch(CSV_URL);
+                if (!response.ok) throw new Error("Network error");
+                const text = await response.text();
+
+                // Robust CSV parsing
+                const rows = text.split('\n').filter(row => row.trim() !== "");
+                const headers = rows[0].split(',').map(h => h.trim());
+                const data = rows.slice(1).map(row => {
+                    const values = row.split(',').map(v => v.trim());
+                    const item = {};
+                    headers.forEach((header, i) => item[header] = values[i] || "");
+                    return item;
+                });
+
+                const filteredData = data.filter(item => {
+                    if (!item['Model Name']) return false;
+
+                    const modelName = item['Model Name'].toLowerCase();
+                    const search = searchQuery.toLowerCase();
+
+                    // 1. Exact Match
+                    if (modelName === search) {
+                        return true;
+                    }
+
+                    // 2. Numeric Search
+                    const modelNumber = modelName.match(/\d+/)?.[0];
+                    if (/^\d+$/.test(search) && modelNumber === search) {
+                        return true;
+                    }
+
+                    // 3. Suffix Search
+                    if (/[a-z]$/.test(search) && modelName.endsWith(search)) {
+                        return true;
+                    }
+
+                    return false;
+                });
+
+                displayResults(filteredData);
+
+            } catch (error) {
+                console.error("Error:", error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        function displayResults(data) {
+            const table = document.getElementById('resultTable');
+            const tbody = table.querySelector("tbody");
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center">No matching processors found</td></tr>`;
+                table.style.display = "none";
+            } else {
+                data.forEach(item => {
+                    const row = document.createElement("tr");
+                    const cooler = item['Cooler'] || item['Cooler Name'];
+                    row.innerHTML = `
+                        <td>${item['Model Name']}</td>
+                        <td>${item['Intel TDP'] || '-'}</td>
+                        <td>${item['Application'] || '-'}</td>
+                        <td>${cooler ? `<a href="https://www.dynatron.co/product-page/${cooler.toLowerCase().replace(/\s+/g, '-')}" target="_blank">${cooler}</a>` : '-'}</td>
+                        <td>${item['Cooler Type'] || '-'}</td>
+                        <td>${item['Maximum Power'] || '-'}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                table.style.display = "table";
+            }
+        }
+
+        function resetSearch() {
+            document.getElementById('search').value = '';
+            document.getElementById('resultTable').style.display = "none";
+        }
+    </script>
+</body>
+</html>
